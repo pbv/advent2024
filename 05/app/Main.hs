@@ -9,8 +9,10 @@ main :: IO ()
 main = do
   args <- getArgs
   case args of
-    [path] -> do --part1 path
-                 part2 path
+    [path] -> do
+      input <- readInput path
+      putStrLn ("Part1: " ++ show (part1 input))
+      putStrLn ("Part2: " ++ show (part2 input))
     _ -> error "invalid arguments"
 
 
@@ -18,29 +20,24 @@ type Order = [(Int,Int)]
 type Update = [Int]
 
 -- reading the input
-data Input
-  = Input { ordering :: Order
-          , updates :: [Update]
-          } deriving Show
+type Input = (Order, [Update])
 
 readInput :: FilePath -> IO Input
 readInput path = do
   ls <- lines <$> readFile path
-  let (ords, ls') = readOrdering ls
-  let ups = readUpdates ls'
-  return Input {ordering = ords, updates=ups}
+  let (order, ls') = readOrdering ls
+  let updates = readUpdates ls'
+  return (order, updates)
 
 readOrdering :: [String] -> (Order, [String])
 readOrdering ls
   = let pairs = map readPair $ takeWhile (not . null) ls
-        _:rest = dropWhile (not . null) ls
+        rest = tail $ dropWhile (not . null) ls
     in (pairs, rest)
 
 readPair :: String -> (Int,Int)
 readPair txt
-  = let a = read (takeWhile (/='|') txt)
-        b = read (tail $ dropWhile (/='|') txt)
-    in (a, b)
+  = read $ "(" ++ map (\x -> if x=='|' then ',' else x) txt ++ ")"
 
 readUpdates :: [String] -> [Update]
 readUpdates = map (read . braces)
@@ -48,11 +45,10 @@ readUpdates = map (read . braces)
 
 
 --  part 1
-part1 :: FilePath -> IO ()
-part1 path = do
-  input <- readInput path
-  let valid = filter (checkUpdate (ordering input)) (updates input)
-  print (sum $ map middle valid)
+part1 :: Input -> Int
+part1 (order,updates)
+  = let valid = filter (checkUpdate order) updates 
+  in sum (map middle valid)
 
 checkUpdate :: Order -> Update -> Bool
 checkUpdate order pages = go pages
@@ -63,13 +59,11 @@ middle :: [a] -> a
 middle xs = xs !! (length xs `div` 2)
 
 --  part 2
-part2 :: FilePath -> IO ()
-part2 path = do
-  input <- readInput path
-  let invalid = filter (not . checkUpdate (ordering input)) (updates input)
-  let fixed = map (reorder (ordering input)) invalid
-  print (sum $ map middle fixed)
-
+part2 :: Input -> Int
+part2 (order,updates)
+  = let invalid = filter (not . checkUpdate order) updates 
+        fixed = map (reorder order) invalid
+    in sum (map middle fixed)
 
 reorder :: Order -> Update -> Update
 reorder order pages = go pages
