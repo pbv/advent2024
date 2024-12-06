@@ -28,24 +28,19 @@ part1 :: Input -> Int
 part1 xss
   = horizontal xss + horizontal xss' + horizontal yss + horizontal yss'
   where xss' = transpose xss
-        yss  = diagonals xss
-        yss' = diagonals' xss
+        yss  = diagonals (+) xss
+        yss' = diagonals (-) xss
 
 horizontal :: Input -> Int
 horizontal xss
   = sum (map countLine xss) + sum (map (countLine.reverse) xss)
 
-diagonals :: Input -> Input
-diagonals xss = map snd $ Map.toList tabl
-  where tabl = Map.fromListWith (++) [(i-j, [x])
-                                     | (i,xs)<-zip [0::Int ..] xss,
-                                       (j,x) <-zip [0::Int ..] xs ]
-
-diagonals' :: Input -> Input
-diagonals' xss = map snd $ Map.toList tabl
-  where tabl = Map.fromListWith (++) [(i+j, [x])
-                                     | (i,xs)<-zip [0::Int ..] xss,
-                                       (j,x) <-zip [0::Int ..] xs ]
+diagonals :: (Int->Int->Int) -> Input -> Input
+diagonals op xss
+  = Map.elems $
+    Map.fromListWith (++) [(i`op`j, [x])
+                          | (i,xs)<-zip [0::Int ..] xss,
+                            (j,x) <-zip [0::Int ..] xs ]
 
 countLine :: [Char] -> Int
 countLine xs
