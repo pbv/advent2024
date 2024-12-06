@@ -7,7 +7,7 @@ module Main where
 import System.Environment
 import Data.Char
 import Data.List
-import Control.Monad
+import Control.Applicative((<|>))
 
 main :: IO ()
 main = do
@@ -39,17 +39,17 @@ parseInput xs
 parseOp :: String -> Maybe (Op, String)
 parseOp [] = Nothing
 parseOp xs
-  = msum [ do xs0 <- consume "mul(" xs
-              (a, xs1) <- parseInt xs0
-              xs2 <- consume "," xs1
-              (b, xs3) <- parseInt xs2
-              xs4 <- consume ")" xs3
-              return (Mul a b, xs4)
-         , do xs0 <- consume "do()" xs
-              return (Do, xs0) 
-         , do xs0 <- consume "don't()" xs
-              return (Dont,xs0)
-         ]
+  = do xs0 <- consume "mul(" xs
+       (a, xs1) <- parseInt xs0
+       xs2 <- consume "," xs1
+       (b, xs3) <- parseInt xs2
+       xs4 <- consume ")" xs3
+       return (Mul a b, xs4)
+  <|> do xs0 <- consume "do()" xs
+         return (Do, xs0) 
+  <|> do xs0 <- consume "don't()" xs
+         return (Dont,xs0)
+
         
 
 
@@ -83,8 +83,8 @@ part2 input = let  initial = (True, 0)
 
 compute :: State -> Op -> State
 compute (flag, !acc) (Mul x y)
-  | flag = (flag, acc+x*y)
-  | otherwise= (flag, acc)
+  | flag      = (flag, acc+x*y)
+  | otherwise = (flag, acc)
 compute (_, acc) Do
   = (True, acc)
 compute (_, acc) Dont
