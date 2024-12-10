@@ -25,7 +25,7 @@ main = do
 
 data Block 
   = Free !Size 
-  | File !Size !FileID 
+  | File !Size !FileID !Bool  -- True if movable, False otherwise (for part 2)
   deriving Show
 
 type Size = Int
@@ -46,9 +46,10 @@ parseBlocks txt
   where
      --
      parseAcc :: Int -> [Int] -> [Block]
-     parseAcc !fid (size:size':sizes) 
-       = File size fid : Free size' : parseAcc (fid+1) sizes 
-     parseAcc !fid [size] = [File size fid]
+     parseAcc !fid (size:size':sizes)
+       | size'>0 = File size fid True : Free size' : parseAcc (fid+1) sizes
+       | otherwise = File size fid True : parseAcc (fid+1) sizes
+     parseAcc !fid [size] = [File size fid True]
      parseAcc _ [] = []
 
 
@@ -60,7 +61,7 @@ unparseBlocks  = concatMap toString . toList
     toString b
       = case b of
           Free size -> replicate size '.'
-          File size fid -> replicate size (head $ show fid)
+          File size fid _ -> replicate size (head $ show fid)
 
 
 -------------------------------------------------------------------------
@@ -73,7 +74,7 @@ checkSum blocks = go 0 0 (toList blocks)
     go _ acc [] = acc
     go !start !acc (b : bs)
       = case b of
-          File size fid ->
+          File size fid _ ->
             let c = sum [k*fid | k<-[start .. start+size-1]]
             in go (start+size) (acc+c) bs
           Free size ->
@@ -82,17 +83,18 @@ checkSum blocks = go 0 0 (toList blocks)
 
 
 -- move files from the end to the beginning,
--- possibly splitting them up 
+-- possibly splitting them up
+-- NB: this part ignores the moveable flag
 compact1 :: Seq Block -> Seq Block
 
-compact1 (File size fid :<| bs)
-  = File size fid :<| compact1 bs
+compact1 (File size fid _ :<| bs)
+  = File size fid False :<| compact1 bs
 
-compact1 (Free size :<| (bs :|> File size' fid))
+compact1 (Free size :<| (bs :|> File size' fid _))
   | size' <= size
-  = File size' fid :<| compact1 (Free (size-size') :<| bs)
+  = File size' fid False :<| compact1 (Free (size-size') :<| bs)
   | otherwise  -- split up the file
-  = File size fid :<| compact1 (bs :|> File (size'-size) fid)
+  = File size fid False :<| compact1 (bs :|> File (size'-size) fid True)
 
 compact1 (Free size :<| (bs :|> Free size'))
   = compact1 (Free size :<| bs) :|> Free size'
@@ -108,24 +110,37 @@ compact1 Empty = Empty
 part2 :: Input -> Int
 part2 = checkSum . compact2 
 
-
 compact2 :: Seq Block -> Seq Block
-compact2 (bs :|> File size fid) =
-      case firstFit size fid bs of
-        Just bs' -> compact2 bs' :|> Free size
-        Nothing -> compact2 bs :|> File size fid
+compact2 (bs :|> File size fid False)   -- skip previously moved files
+  = compact2 bs :|> File size fid False
+compact2 (bs :|> File size fid True)    -- try to move a file
+  = case firstFit size fid bs of
+      Just bs' -> compact2 bs' :|> Free size
+      Nothing -> compact2 bs :|> File size fid False
+  
 compact2 (bs :|> Free size) = compact2 bs :|> Free size
 compact2 Empty = Empty
 
--- find the first complete fit for a file 
-firstFit :: Size -> FileID ->  Seq Block -> Maybe (Seq Block)
+-- find the first complete fit for a movable file
+firstFit :: Size -> FileID -> Seq Block -> Maybe (Seq Block)
 firstFit size fid blocks = go blocks
   where
     go Empty = Nothing
     go (Free size' :<| bs)
-        | size'>=size = Just (File size fid :<| Free (size'-size) :<| bs)
-        | otherwise =  (Free size' :<|) <$> go bs
-    go (b :<| bs) = (b:<|) <$> go bs
+        | size'>size  = Just (File size fid False :<| Free (size'-size) :<| bs)
+        | size'==size = Just (File size fid False :<| bs)
+        | otherwise   =  (Free size' :<|) <$> go bs
+    go (b :<| bs)     = (b:<|) <$> go bs
 
+-----------------------------------------------------------------
+-- benchmarking
 
+-- naive solution
+--  Total   time    6.750s  (  6.750s elapsed)
+
+-- distinguish moveable/non-moveable files
+--  Total   time    5.143s  (  5.140s elapsed)
+
+-- avoid creation of 0-size free blocks
+--  Total   time    3.263s  (  3.260s elapsed)
 
