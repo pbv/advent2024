@@ -63,8 +63,8 @@ digits n = loop n 0
 -- | dynamic programming approach
 -- computes just the number of stones
 solve_memo :: Int -> Input -> Int
-solve_memo iters input = sum (IntMap.elems memo)
-  where memo = applyMany iters blinks (IntMap.fromListWith (+) [(n,1)|n<-input])
+solve_memo n input = sum (IntMap.elems memo)
+  where memo = applyMany n blinks (IntMap.fromListWith (+) [(x,1)|x<-input])
 
 blinks :: IntMap Int -> IntMap Int
 blinks memo
