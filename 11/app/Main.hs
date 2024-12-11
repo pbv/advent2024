@@ -60,10 +60,8 @@ digits n = loop n 0
     loop k !acc = loop (k`div`10) (1+acc)
 
 
--- dynamic programming approach
-type Memo = IntMap Int
-
--- | computes just the number of stones
+-- | dynamic programming approach
+-- computes just the number of stones
 solve_memo :: Int -> Input -> Int
 solve_memo iters input = sum (IntMap.elems memo)
   where memo = applyMany iters blinks (IntMap.fromListWith (+) [(n,1)|n<-input])
