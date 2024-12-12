@@ -55,16 +55,16 @@ components input = go input
     go :: Input -> [Group]
     go inp = case Map.lookupMin inp of
               Nothing -> []
-              Just (loc,c) -> let r = bfs [loc] c Set.empty
+              Just (loc,c) -> let r = dfs [loc] c Set.empty
                               in r : go (Map.withoutKeys inp r)
     
-    bfs ::  [Loc] -> Char -> Group -> Group
-    bfs [] _ acc = acc
-    bfs (loc:locs) c acc
+    dfs ::  [Loc] -> Char -> Group -> Group
+    dfs [] _ acc = acc
+    dfs (loc:locs) c acc
       =  let locs' = [ loc' | loc'<-directions loc,
                        loc'`Set.notMember`acc,
                        Map.lookup loc' input == Just c ]
-         in bfs (locs'++locs) c (Set.insert loc acc)
+         in dfs (locs'++locs) c (Set.insert loc acc)
     
 
 
