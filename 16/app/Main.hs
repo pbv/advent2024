@@ -10,7 +10,7 @@ import           Data.List
 import           Data.Ord
 import           Data.Set (Set)
 import qualified Data.Set as Set
-import           Data.Map.Strict (Map, (!))
+import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 
 
@@ -61,8 +61,6 @@ parse txt
 ----------------------------------------------------------------------
 
 type State = (Loc, Dir)     -- the reindeer's state
-
-type Move = State -> State  -- a move is a change of state
 
 forward :: Loc -> Dir -> Loc
 forward (!x,!y) dir
@@ -185,12 +183,16 @@ dijkstra graph source =
 ---------------------------------------------------------------------
 -- for part 2
 pathsFrom :: Info -> State ->  [[Loc]]
-pathsFrom info end = go end
+pathsFrom info = go 
   where
     go s 
       = case Map.lookup s info.prev of
           Just ss -> [fst s:path | s'<-ss, path <- go s'  ]
           Nothing -> [[fst s]]
+
+
+
+
 
 
 
