@@ -6,12 +6,13 @@
 module Main where
 
 import           System.Environment
-import           Data.List
-import           Data.Ord
+import           Data.List (foldl')
 import           Data.Set (Set)
 import qualified Data.Set as Set
-import           Data.Map.Strict (Map)
-import qualified Data.Map.Strict as Map
+import           Data.Map (Map)
+import qualified Data.Map as Map
+import           Data.IntMap (IntMap)
+import qualified Data.IntMap as IntMap
 
 
 main :: IO ()
@@ -28,7 +29,6 @@ main = do
     _ -> error "invalid arguments"
 
 -- input types
-
 type Loc = (Int,Int)
 
 data Dir = N | W | S | E deriving (Eq, Ord, Enum, Show)
@@ -82,6 +82,31 @@ transitions (loc,dir) = [ ((forward loc dir, dir), 1)
                         , ((loc, turnCW dir),      1000) ]
 
 
+             
+
+--------------------------------------------------------------------
+-- Dijkstra's algorithm 
+-- adapted from Well-Typed Haskell Unfolder presentation:
+-- https://github.com/well-typed/unfolder/blob/main/episode020-dijkstras-shortest-paths/Dijkstra.hs
+-- modified to record multiple minimum distance paths and
+-- use an intmap as a priority queue instead of a list of vertices
+data Graph =
+  MkGraph
+    { vertices   :: [State]
+    , neighbours :: State -> [State]
+    , cost       :: State -> State -> Dist
+    }
+
+type Dist = Int   -- maxBound for infinity
+
+data Info  =
+  MkInfo
+    { dist :: !(Map State Dist)     -- not in map: INFINITY
+    , prev :: !(Map State [State])  -- not in map: UNDEFINED
+    , pqueue :: !(PQ State)
+    }
+  deriving Show
+
 makeGraph :: Maze -> Graph
 makeGraph maze
   = MkGraph { vertices = states
@@ -99,34 +124,6 @@ makeGraph maze
     neighbours_of s = [ s' | (s',_) <- transitions s, fst s'`Set.member`locs ]
     cost_of :: State -> State -> Dist
     cost_of s s' = head [ c | (s'',c) <- transitions s, s' == s'' ]
-              
-
-
--- Dijkstra's algorithm 
-data Graph =
-  MkGraph
-    { vertices   :: [State]
-    , neighbours :: State -> [State]
-    , cost       :: State -> State -> Dist
-    }
-
-type Dist = Int   -- maxBound for infinity
-
-data Info  =
-  MkInfo
-    { dist :: !(Map State Dist)     -- not in map: INFINITY
-    , prev :: !(Map State [State])  -- not in map: UNDEFINED
-    }
-  deriving Show
-
-
-minViewOn :: (State -> Dist) -> [State] -> Maybe (State, [State])
-minViewOn _ [] = Nothing
-minViewOn f xs =
-  let
-    m = minimumBy (comparing f) xs
-  in
-    Just (m, delete m xs)
 
 distanceOf :: Info -> State -> Dist
 distanceOf info v 
@@ -135,16 +132,16 @@ distanceOf info v
 dijkstra :: Graph -> State -> Info 
 dijkstra graph source =
   let
-    loop :: [State] -> Info -> Info 
-    loop q info =
-      case minViewOn (distanceOf info) q of
+    loop :: Info -> Info 
+    loop info =
+      case minView info.pqueue of
         Nothing ->
           -- we're done!
           info
-        Just (u, q') ->
+        Just (u, pq') ->
           let du = distanceOf info u
           in 
-          if du < maxBound then             
+          if du < maxBound then
             let
                 update :: Info -> State -> Info 
                 update i v =
@@ -156,32 +153,33 @@ dijkstra graph source =
                         MkInfo
                           (Map.insert v alt i.dist)
                           (Map.insert v [u] i.prev)
+                          (addWithPri v alt i.pqueue)
                       EQ ->
                         MkInfo
                           (Map.insert v alt i.dist)
                           (Map.insertWith (++) v [u] i.prev)
+                          i.pqueue 
                       GT ->
-                        i
+                        i 
                 info' =
-                  foldl' update info
-                      (filter (`elem`q') (graph.neighbours u))
+                  foldl' update info{pqueue=pq'} (graph.neighbours u)
               in
-                loop q' info'
+                loop info'
             else
               -- nothing can happen anymore
               info
 
   in
-    loop graph.vertices
+    loop 
       (MkInfo
         { dist = Map.singleton source 0
         , prev = Map.empty
+        , pqueue = IntMap.singleton 0 [source]
         }
       )
 
 
----------------------------------------------------------------------
--- for part 2
+-- build paths backwards from end state (for part 2)
 pathsFrom :: Info -> State ->  [[Loc]]
 pathsFrom info = go 
   where
@@ -191,7 +189,28 @@ pathsFrom info = go
           Nothing -> [[fst s]]
 
 
+-- utilities -----------------------------------------------------------
+-- use IntMap as a replacement for priority queues
+-- (big speedup over naive searching through lists)
 
+type PQ a = IntMap [a]
+
+minView :: PQ a -> Maybe (a, PQ a)
+minView pq
+  = case IntMap.lookupMin pq of
+      Nothing -> Nothing
+      Just (_, []) -> Nothing
+      Just (_, x:xs) ->
+        let pq' = if null xs then
+                    IntMap.deleteMin pq
+                  else
+                    IntMap.updateMin (\_ -> Just xs) pq                    
+        in 
+          Just (x, pq')
+               
+addWithPri :: a -> Int -> PQ a -> PQ a
+addWithPri x p pq
+  = IntMap.insertWith (++) p [x] pq
 
 
 
