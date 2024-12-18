@@ -61,16 +61,20 @@ part1 input = let mem = fillMemory input
 
 ----------------------------------------------------------------------
 -- Part 2
--- naive approach: just repeat the above taking larger segments of the
+-- binary partition: iterate the above narrowing the segments of the
 -- input until there no longer exists a path
 part2 :: Input -> Loc
-part2 input = go 1024
+part2 input = go 1025 (n+1)
   where
     n = length input
-    go k | k>n = error "no solution"
-         | otherwise = case part1 (take k input) of
-                         Nothing -> input !! (k-1)
-                         _ -> go (k+1)
+    go lo hi
+    -- invariant: minimal segment size is >= lo and < hi
+      | lo>=hi = input !! (min lo hi)
+      | otherwise = let mid = (lo+hi)`div`2
+                    in case part1 (take mid input) of
+                         Nothing -> go lo (mid-1)
+                         Just _ -> go mid hi
+                            
     
 
 
