@@ -1,4 +1,3 @@
-{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE OverloadedRecordDot #-}
 --
 -- Day 18: RAM Run ---
@@ -144,16 +143,11 @@ dijkstra graph source =
                   let
                     alt = du + 1
                   in
-                    case compare alt (distanceOf i v) of
-                      LT ->
+                     if alt < distanceOf i v then
                         MkInfo
                           (Map.insert v alt i.dist)
                           (addWithPri v alt i.pqueue)
-                      EQ ->
-                        MkInfo
-                          (Map.insert v alt i.dist)
-                          i.pqueue 
-                      GT ->
+                     else
                         i 
                 info' =
                   foldl' update info{pqueue=pq'} (graph.neighbours u)
