@@ -7,8 +7,7 @@ import           System.Environment
 import           Data.List
 import           Data.Maybe
 import qualified Data.Map as Map
-import           Data.Map (Map)
-
+import           Data.Map (Map, (!))
 
 main :: IO ()
 main = do
@@ -20,7 +19,7 @@ main = do
       putStrLn ("Part2: " ++ show (part2 input))
     _ -> error "invalid arguments"
 
---------------
+-- input types
 type Input = ([String], [String])   -- wordlist, strings-to-match
 
 readInput :: FilePath -> IO Input
@@ -33,7 +32,7 @@ parse txt
   = let (first:_:rest) = lines txt
     in (map (filter (/=',')) (words first), rest)
 
--- | a Trie structure for storing string prefixes
+-- | a Trie structure for storing strings prefixes
 newtype Trie
   = MkTrie (Map Char Trie)
   deriving Show
@@ -61,7 +60,7 @@ makeTrie = foldr insertTrie emptyTrie
 
 
 -- | match the Kleene closure (*-closure) of words in a trie
-matchStar :: Trie -> String  -> Bool
+matchStar :: Trie -> String -> Bool
 matchStar trie xs 
   = any isFinal (matchNFA trie xs [trie])
 
@@ -77,22 +76,61 @@ matchNFA start xs tries = go xs tries
     go (x:xs) ts = let ts' = submatches x ts
                    in  go xs ([start | any isFinal ts'] ++ ts')
 
-submatches ::  Char -> [Trie] -> [Trie]
+submatches :: Char -> [Trie] -> [Trie]
 submatches x tries
   =  catMaybes [Map.lookup x branches | MkTrie branches<-tries] 
              
---- debugging
--- build a regexp for the Kleene closure of the list of words
-makeRegexp :: [String] -> String
-makeRegexp list = "^(" ++ intercalate "|" list  ++ ")*$"
-        
-
+      
 ------------------------------------------------------
 part1 :: Input -> Int
 part1 (wordlist, strings) 
   = let trie = makeTrie wordlist
-    in length (filter (matchStar trie) strings)
+    in length $ filter (matchStar trie) strings
+  -- alternative (using part 2)
+  -- in length $ filter ((>0).countMemo trie) strings       
 
-                 
+----------------------------------------------------------                 
 part2 :: Input -> Int
-part2 _input = 0 
+part2 (wordlist, strings)
+  = let trie = makeTrie wordlist
+    in sum (map (countMemo trie) strings)
+
+-- list of indices where matching can continue after consuming a
+-- prefix from the trie
+suffixIndices :: Trie -> String -> [Int]
+suffixIndices trie = go trie 0 
+  where
+    go t n [] = [n | isFinal t]
+    go t@(MkTrie branches) n (x:xs) 
+      = [n | isFinal t]
+        ++
+        case Map.lookup x branches of
+          Nothing -> []
+          Just t' -> go t' (n+1) xs
+
+-- recursive definition to count the number of possible matches
+-- (too slow)
+countNaive :: Trie -> String -> Int
+countNaive trie = go 
+  where
+    go str
+      | null str = 1
+      | otherwise = sum [go (drop i str) | i<-suffixIndices trie str]
+
+-- memoized version of the above
+countMemo :: Trie -> String -> Int
+countMemo trie str = memo!str
+  where
+    memo :: Map String Int
+    memo = Map.fromList [(xs, count xs) | xs<-tails str]
+    count :: String -> Int
+    count xs
+      | null xs =  1
+      | otherwise= sum [memo!(drop i xs) | i<-suffixIndices trie xs]
+
+
+
+
+
+
+
