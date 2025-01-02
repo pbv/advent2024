@@ -178,22 +178,28 @@ addWithPri x p pq
 part1 :: Input -> Int
 part1 track
   = let info = dijkstra (makeGraph track) track.start
-        path = Set.fromList (shortestPath info track.end)
+        path = shortestPath info track.end
         candidates = Map.fromListWith (+)
-                     [(d,1) | v<-Set.toList track.walls,
-                       v' <- transitions v,
-                       v' `Set.member` path, 
-                       v'' <- transitions v,
-                       v' < v'',
-                       v'' `Map.member` info.dist,
-                       let d =  abs (info.dist!v' - info.dist!v'') - 2,
-                       d>=100 ]
+                     [(d,1) | (v:vs) <- tails path,
+                      v' <- vs,
+                      distance v v'<= 2,
+                      let d =  abs (info.dist!v - info.dist!v') - distance v v',
+                      d>=100 ]
     in sum candidates
-
-
-
-
 
 --------------------------------------------------------                 
 part2 :: Input -> Int
-part2 input = 0 
+part2 track
+  = let info = dijkstra (makeGraph track) track.start
+        path = shortestPath info track.end
+        candidates = Map.fromListWith (+)
+                     [(d,1) | (v:vs) <- tails path,
+                      v' <- vs,
+                      distance v v' <= 20,
+                      let d =  abs (info.dist!v - info.dist!v') - distance v v',
+                      d>=100 ]
+    in sum candidates
+
+-- Manhattan distance
+distance :: Loc -> Loc -> Int
+distance (x1,y1) (x2,y2) = abs (x1-x2) + abs (y1-y2)
