@@ -10,6 +10,7 @@ import           Data.Char
 
 import qualified Data.Map as Map
 import           Data.Map (Map, (!))
+import           Control.Monad.State
 
 main :: IO ()
 main = do
@@ -95,32 +96,31 @@ type Memo = Map (Int,Char,Char) Int
 
 -- solve for a number of control keypads
 solve :: Int -> String -> Int
-solve nkp xs = fst (go 0 Map.empty 'A' xs)
+solve nkp xs = evalState (go 0 'A' xs) Map.empty
   where
-    go :: Int -> Memo -> Char -> String -> (Int, Memo)
-    go n memo _ s | n>nkp  = (length s, memo)
-    go n memo x s = loop memo 'A' s
+    go :: Int -> Char -> String -> State Memo Int
+    go n _ s | n>nkp  = return (length s)
+    go n x s = loop 'A' s
       where
-        loop :: Memo -> Char -> String -> (Int, Memo)
-        loop memo _ [] = (0, memo)
-        loop memo x (y:ys)
-          | Just s <- Map.lookup (n,x,y) memo =
-              let (r, memo') = loop memo y ys
-              in (s+r, memo')
-          | otherwise =
-              let
-                (r, memo') = case paths n x y of
-                               [p] -> go (n+1) memo 'A' p
-                               [p1,p2] ->
-                                 let (r1, memo1) = go (n+1) memo 'A' p1
-                                     (r2, memo2) = go (n+1) memo1 'A' p2
-                                 in if r1<=r2
-                                    then (r1, memo2)
-                                    else (r2, memo2)
-                memo'' = Map.insert (n,x,y) r memo'
-                (s, memo''') = loop memo'' y ys
-              in
-                (r+s, memo''')
+        loop :: Char -> String -> State Memo Int
+        loop _ [] = return 0
+        loop x (y:ys) = do
+          memo <- get
+          case Map.lookup (n,x,y) memo of
+            Just s -> do
+              r <- loop y ys
+              return (r+s)
+            Nothing -> do
+              r <- case paths n x y of
+                [p] -> go (n+1) 'A' p
+                [p1, p2] -> do
+                  r1 <- go (n+1) 'A' p1
+                  r2 <- go (n+1) 'A' p2
+                  return (min r1 r2)
+              modify (Map.insert (n,x,y) r)
+              s <- loop y ys
+              return (r+s)
+
               
 -- fetch the right paths for a level
 paths :: Int -> Char -> Char -> [String]
