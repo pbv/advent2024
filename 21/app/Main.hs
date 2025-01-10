@@ -1,11 +1,15 @@
 --
 -- Day 21: Keypad Conundrum
 --
+
 module Main where
 
 import           System.Environment
 import           Data.List
 import           Data.Char
+
+import qualified Data.Map as Map
+import           Data.Map (Map, (!))
 
 main :: IO ()
 main = do
@@ -14,8 +18,7 @@ main = do
     [path] -> do
       input <- readInput path
       putStrLn ("Part1: " ++ show (part1 input))
-      -- too slow
-      -- putStrLn ("Part2: " ++ show (part2 input))
+      putStrLn ("Part2: " ++ show (part2 input))
     _ -> error "invalid arguments"
 
 type Input = [String]
@@ -34,91 +37,113 @@ numKeypad = ["789", "456", "123", ".0A"]
 dirKeypad :: Keypad
 dirKeypad = [".^A", "<v>"]
 
-type Pos = (Int,Int)  -- row, column
 type Vec = (Int,Int)
+type Pos = Vec  -- row, column
 
 findPos :: Char -> Keypad -> Pos
 findPos c kp
   = head [(i,j) | (i,row)<-zip [0..] kp, (j,x)<-zip [0..] row, x == c]
+       
+pathsNum :: Char -> Char -> [String]
+pathsNum current next
+  = let loc = findPos current numKeypad
+        loc'= findPos next numKeypad
+        avoid = findPos '.' numKeypad     
+    in [m ++ "A" | m <- moves loc loc', checkMoves avoid loc m]
 
--- translate keypresses on a keypad into keypresses on the directional keypad
-translate :: Keypad -> String -> [String]
-translate kp seq = go start seq 
-  where start = findPos 'A' kp
-        avoid = findPos '.' kp
-        go loc [] = [""]
-        go loc (c:cs) 
-          = let loc' = findPos c kp
-                delta= posDiff loc loc'               
-            in [ m ++ ('A':ms) | m<-moves delta
-                               , checkMoves avoid loc m 
-                               , ms<-go loc' cs ]
+pathsDir :: Char -> Char -> [String]
+pathsDir current next
+  = let loc = findPos current dirKeypad
+        loc' = findPos next dirKeypad
+        avoid = findPos '.' dirKeypad
+    in [m ++ "A" | m <- moves loc loc', checkMoves avoid loc m]
 
-
-moves :: Vec -> [String]
-moves (di,dj)
-  = nub [ vert di ++ horiz dj, horiz dj ++ vert di ]
+moves :: Pos -> Pos -> [String]
+moves (y1,x1) (y2,x2)
+  | di/=0 && dj/=0 = [ vert++horiz, horiz++vert ]
+  | otherwise = [ vert++horiz ]
   where
-    vert d | d>=0 = replicate d 'v'
-           | otherwise = replicate (-d) '^'
-    horiz d | d>=0 = replicate d '>'
-            | otherwise = replicate (-d) '<'
+    di = y2-y1
+    dj = x2-x1
+    vert | di>=0 = replicate di 'v'
+         | otherwise = replicate (-di) '^'
+    horiz | dj>=0 = replicate dj '>'
+          | otherwise = replicate (-dj) '<'
 
+
+-- check that a sequence of moves do not go outside valid keypad positions
 checkMoves :: Pos -> Pos -> String -> Bool
-checkMoves avoid loc cs
-  = go loc cs
-  where go loc _ | loc == avoid = False
-        go _ [] = True
-        go (i,j) (c:cs)
-          = case c of
-              'v' -> go (i+1,j) cs
-              '^' -> go (i-1,j) cs
-              '>' -> go (i,j+1) cs
-              '<' -> go (i,j-1) cs
-        
+checkMoves avoid loc ms = avoid `notElem` listPositions loc ms
+
+listPositions :: Pos -> String -> [Pos]
+listPositions = scanl' updatePos 
+
+updatePos :: Pos -> Char -> Pos
+updatePos (i,j) c
+  = case c of
+      'v' -> (i+1,j) 
+      '^' -> (i-1,j) 
+      '>' -> (i,j+1) 
+      '<' -> (i,j-1)
+      _ -> error "invalid character"
 
 
-posDiff :: Pos -> Pos -> Vec
-posDiff (i,j) (i', j') = (i'-i, j'-j)
+-- finding the minimum solution
+-- memo table for the length of the shortest sub-solution of each level
+-- 0: numeric, >0: directional 
+type Memo = Map (Int,Char,Char) Int  
+
+-- solve for a number of control keypads
+solve :: Int -> String -> Int
+solve nkp xs = fst (go 0 Map.empty 'A' xs)
+  where
+    go :: Int -> Memo -> Char -> String -> (Int, Memo)
+    go n memo _ s | n>nkp  = (length s, memo)
+    go n memo x s = loop memo 'A' s
+      where
+        loop :: Memo -> Char -> String -> (Int, Memo)
+        loop memo _ [] = (0, memo)
+        loop memo x (y:ys)
+          | Just s <- Map.lookup (n,x,y) memo =
+              let (r, memo') = loop memo y ys
+              in (s+r, memo')
+          | otherwise =
+              let
+                (r, memo') = case paths n x y of
+                               [p] -> go (n+1) memo 'A' p
+                               [p1,p2] ->
+                                 let (r1, memo1) = go (n+1) memo 'A' p1
+                                     (r2, memo2) = go (n+1) memo1 'A' p2
+                                 in if r1<=r2
+                                    then (r1, memo2)
+                                    else (r2, memo2)
+                memo'' = Map.insert (n,x,y) r memo'
+                (s, memo''') = loop memo'' y ys
+              in
+                (r+s, memo''')
+              
+-- fetch the right paths for a level
+paths :: Int -> Char -> Char -> [String]
+paths 0 x y = pathsNum x y
+paths _ x y = pathsDir x y
 
 
--- helper functions
-translateNum = translate numKeypad
-translateDir = translate dirKeypad
+ 
+-- complexity of a sequence with a given number of control keypads
+complexity :: Int -> String -> Int
+complexity nkp seq = minLen nkp seq * numeric seq
 
--- complexity of a sequence
-complexity :: String -> Int
-complexity seq = minLen seq * numeric seq
-
-
-minLen :: String -> Int
-minLen seq
-  = minimum $ map length (translateNum seq >>= translateDir >>= translateDir)
-
+minLen :: Int -> String -> Int
+minLen nkp xs = solve nkp xs
 
 numeric :: String -> Int
 numeric seq = read (filter isDigit seq)
                
 -------------------------------------------------------------
 part1 :: Input -> Int
-part1 input = sum (map complexity input)
-
+part1 input = sum (map (complexity 2) input)
 
 -------------------------------------------------------------             
 part2 :: Input -> Int
-part2 input = sum (map complexity2 input)
-
--- complexity of a sequence
-complexity2 :: String -> Int
-complexity2 seq = minLen2 seq * numeric seq
-
-minLen2 :: String -> Int
-minLen2 seq
-  = minimum $ map length (translateNum seq >>= iterM 25 translateDir)
-
-iterM :: Monad m => Int -> (a -> m a) -> a -> m a
-iterM n f a = go n a
-  where
-    go 0 x = pure x
-    go k x = f x >>= go (k-1) 
+part2 input = sum (map (complexity 25) input)
 
