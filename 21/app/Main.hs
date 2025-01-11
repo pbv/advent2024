@@ -9,7 +9,7 @@ import           Data.List
 import           Data.Char
 
 import qualified Data.Map as Map
-import           Data.Map (Map, (!))
+import           Data.Map (Map)
 import           Control.Monad.State
 
 main :: IO ()
@@ -96,11 +96,11 @@ type Memo = Map (Int,Char,Char) Int
 
 -- solve for a number of control keypads
 solve :: Int -> String -> Int
-solve nkp xs = evalState (go 0 'A' xs) Map.empty
+solve nkp xs = evalState (go 0 xs) Map.empty
   where
-    go :: Int -> Char -> String -> State Memo Int
-    go n _ s | n>nkp  = return (length s)
-    go n x s = loop 'A' s
+    go :: Int -> String -> State Memo Int
+    go n s | n>nkp  = return (length s)
+    go n s = loop 'A' s
       where
         loop :: Char -> String -> State Memo Int
         loop _ [] = return 0
@@ -112,10 +112,10 @@ solve nkp xs = evalState (go 0 'A' xs) Map.empty
               return (r+s)
             Nothing -> do
               r <- case paths n x y of
-                [p] -> go (n+1) 'A' p
+                [p] -> go (n+1) p
                 [p1, p2] -> do
-                  r1 <- go (n+1) 'A' p1
-                  r2 <- go (n+1) 'A' p2
+                  r1 <- go (n+1) p1
+                  r2 <- go (n+1) p2
                   return (min r1 r2)
               modify (Map.insert (n,x,y) r)
               s <- loop y ys
