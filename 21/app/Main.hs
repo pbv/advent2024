@@ -11,6 +11,7 @@ import           Data.Char
 import qualified Data.Map as Map
 import           Data.Map (Map)
 import           Control.Monad.State
+import           Test.QuickCheck
 
 main :: IO ()
 main = do
@@ -127,7 +128,6 @@ paths :: Int -> Char -> Char -> [String]
 paths 0 x y = pathsNum x y
 paths _ x y = pathsDir x y
 
-
  
 -- complexity of a sequence with a given number of control keypads
 complexity :: Int -> String -> Int
@@ -146,4 +146,64 @@ part1 input = sum (map (complexity 2) input)
 -------------------------------------------------------------             
 part2 :: Input -> Int
 part2 input = sum (map (complexity 25) input)
+
+-------------------------------------------------------------
+-- QuickCheck properties
+
+-- generate strings of a given keypad
+genInput :: Keypad -> Gen String
+genInput kp = (++"A") <$> listOf (elements xs)
+  where xs = filter (\x -> x/='A' && x/='.') (concat kp)
+
+
+-- optimal substructure for the numeric and directional encodings
+prop_optimal_num :: Property
+prop_optimal_num =
+  forAll (resize 10 $ genInput numKeypad) $ \xs -> 
+  forAll (resize 10 $ genInput numKeypad) $ \ys ->
+  collect (length xs, length ys) $
+  minimal (encodeNum (xs++ys))
+  ===
+  minimal (encodeNum xs) + minimal (encodeNum ys)
+
+prop_optimal_dir :: Property
+prop_optimal_dir=
+  forAll (resize 10 $ genInput dirKeypad) $ \xs -> 
+  forAll (resize 10 $ genInput dirKeypad) $ \ys ->
+  collect (length xs, length ys) $
+  minimal (encodeDir (xs++ys))
+  ===
+  minimal (encodeDir xs) + minimal (encodeDir ys)
+
+-- encode a numeric string
+encodeNum :: String -> [String]
+encodeNum xs = loop 'A' xs
+  where
+    loop x [] = [""]
+    loop x (y:ys) = [m++m' | m<-pathsNum x y, m'<-loop y ys]
+
+-- encode a direction string
+encodeDir :: String -> [String]
+encodeDir xs = loop 'A' xs
+  where
+    loop x [] = [""]
+    loop x (y:ys) = [m++m' | m<-pathsDir x y, m'<-loop y ys]
+
+
+-- very slow for n>2
+prop_solve_correct :: Int -> Property
+prop_solve_correct n =
+  forAll (resize 3 $ genInput numKeypad) $ \xs ->
+  solve n xs === minimal (all_solutions n xs) 
+
+
+all_solutions :: Int -> String -> [String]
+all_solutions nkps str = go nkps (encodeNum str)
+  where
+    go :: Int -> [String] -> [String]
+    go 0 xs = xs
+    go n xs = go (n-1) [y | x<-xs, y<-encodeDir x]
+
+minimal :: [String] -> Int
+minimal = minimum . map length 
 
